@@ -1,24 +1,20 @@
 package com.galex.intercom;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.view.View;
 import android.view.WindowManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
     private WebView webView;
     public static final String PREFS = "intercom_prefs";
@@ -29,7 +25,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Показывать поверх экрана блокировки
         getWindow().addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
@@ -39,17 +34,13 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
         webView = findViewById(R.id.webview);
-
         setupWebView();
         requestPermissions();
         startDoorbellService();
 
-        // Загружаем интерфейс
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         String server = prefs.getString(KEY_SERVER, DEFAULT_SERVER);
         webView.loadUrl(server + "/app.html");
-
-        // Если запущены из уведомления о звонке
         handleIntent(getIntent());
     }
 
@@ -59,37 +50,25 @@ public class MainActivity extends AppCompatActivity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        settings.setDatabaseEnabled(true);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
-                // Разрешаем микрофон, камеру и видео без запроса
                 request.grant(request.getResources());
             }
         });
-
-        // JavaScript интерфейс для связи с нативным кодом
         webView.addJavascriptInterface(new WebAppInterface(this), "Android");
     }
 
     private void requestPermissions() {
-        String[] permissions = {
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.CAMERA
-        };
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions = new String[]{
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.CAMERA,
-                Manifest.permission.POST_NOTIFICATIONS
-            };
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            String[] perms = {Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA};
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                perms = new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA, Manifest.permission.POST_NOTIFICATIONS};
+            }
+            requestPermissions(perms, 1);
         }
-        ActivityCompat.requestPermissions(this, permissions, 1);
     }
 
     private void startDoorbellService() {
@@ -109,22 +88,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleIntent(Intent intent) {
         if (intent != null && "DOORBELL".equals(intent.getAction())) {
-            // Звонок - передаём событие в WebView
             webView.post(() -> webView.evaluateJavascript("showRinging();", null));
         }
     }
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        }
-        // Не выходим - держим в фоне
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        // Сервис продолжает работать
+        if (webView.canGoBack()) webView.goBack();
     }
 }
