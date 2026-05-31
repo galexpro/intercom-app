@@ -3,11 +3,11 @@ package com.galex.intercom;
 import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -16,10 +16,10 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final String TAG = "IntercomApp";
     private WebView webView;
     public static final String PREFS = "intercom_prefs";
     public static final String KEY_SERVER = "server_url";
@@ -44,37 +44,35 @@ public class MainActivity extends AppCompatActivity {
 
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         String server = prefs.getString(KEY_SERVER, DEFAULT_SERVER);
+        Log.d(TAG, "Loading: " + server + "/app.html");
         webView.loadUrl(server + "/app.html");
         handleIntent(getIntent());
     }
 
     private void setupWebView() {
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        settings.setDatabaseEnabled(true);
-        // Разрешаем getUserMedia на HTTP
-        settings.setJavaScriptCanOpenWindowsAutomatically(true);
-
+        WebSettings s = webView.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(true);
+        s.setAllowContentAccess(true);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        s.setDatabaseEnabled(true);
         WebView.setWebContentsDebuggingEnabled(true);
 
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                view.loadUrl(url);
-                return true;
-            }
-        });
-
+        webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
-                // Разрешаем все запросы включая микрофон и камеру
+                Log.d(TAG, "onPermissionRequest: " + java.util.Arrays.toString(request.getResources()));
                 runOnUiThread(() -> request.grant(request.getResources()));
+            }
+
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage msg) {
+                Log.d(TAG, "JS [" + msg.messageLevel() + "] " + msg.message()
+                    + " (" + msg.sourceId() + ":" + msg.lineNumber() + ")");
+                return true;
             }
 
             @Override
@@ -113,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
                 startService(service);
             }
         } catch (Exception e) {
-            android.util.Log.e("Intercom", "Service start error: " + e.getMessage());
+            Log.e(TAG, "Service error: " + e.getMessage());
         }
     }
 
