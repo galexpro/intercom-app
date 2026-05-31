@@ -17,10 +17,11 @@ import android.webkit.WebViewClient;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements WebAppInterface.WebViewCallback {
 
     private static final String TAG = "IntercomApp";
     private WebView webView;
+    private WebAppInterface webAppInterface;
     public static final String PREFS = "intercom_prefs";
     public static final String KEY_SERVER = "server_url";
     public static final String DEFAULT_SERVER = "http://192.168.2.101:1984";
@@ -49,6 +50,14 @@ public class MainActivity extends AppCompatActivity {
         handleIntent(getIntent());
     }
 
+    @Override
+    public void onAudioData(final String base64Data) {
+        // Передаём PCM данные из нативного микрофона в JavaScript
+        runOnUiThread(() -> webView.evaluateJavascript(
+            "if(typeof onNativeMicData==='function')onNativeMicData('" + base64Data + "');",
+            null));
+    }
+
     private void setupWebView() {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
@@ -64,14 +73,13 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
-                Log.d(TAG, "onPermissionRequest: " + java.util.Arrays.toString(request.getResources()));
+                Log.d(TAG, "Permission: " + java.util.Arrays.toString(request.getResources()));
                 runOnUiThread(() -> request.grant(request.getResources()));
             }
 
             @Override
             public boolean onConsoleMessage(ConsoleMessage msg) {
-                Log.d(TAG, "JS [" + msg.messageLevel() + "] " + msg.message()
-                    + " (" + msg.sourceId() + ":" + msg.lineNumber() + ")");
+                Log.d(TAG, "JS: " + msg.message());
                 return true;
             }
 
@@ -82,7 +90,9 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        webView.addJavascriptInterface(new WebAppInterface(this), "Android");
+        webAppInterface = new WebAppInterface(this);
+        webAppInterface.setCallback(this);
+        webView.addJavascriptInterface(webAppInterface, "Android");
     }
 
     private void requestAppPermissions() {
@@ -133,5 +143,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) webView.goBack();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (webAppInterface != null) webAppInterface.stopMic();
+        super.onDestroy();
     }
 }
