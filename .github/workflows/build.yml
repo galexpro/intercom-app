@@ -24,7 +24,32 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
+        id: build
+        run: |
+          ./gradlew assembleDebug 2>&1 | tee build.log
+          EXIT=${PIPESTATUS[0]}
+          if [ $EXIT -ne 0 ]; then
+            # Сохраняем краткий лог ошибки в переменную
+            ERRORS=$(grep -A3 "What went wrong\|error:\|FAILED\|Exception" build.log | head -50)
+            echo "BUILD_ERRORS<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERRORS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+          exit $EXIT
+
+      - name: Create issue with build errors
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const errors = `${{ steps.build.outputs.BUILD_ERRORS }}`;
+            const body = `## Build failed\n\n\`\`\`\n${errors}\n\`\`\``;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Build failed - ${new Date().toISOString().slice(0,16)}`,
+              body: body
+            });
 
       - name: Upload APK
         if: success()
@@ -33,11 +58,3 @@ jobs:
           name: intercom-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          retention-days: 7
