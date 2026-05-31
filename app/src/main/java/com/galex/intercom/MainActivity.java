@@ -1,10 +1,8 @@
 package com.galex.intercom;
 
 import android.Manifest;
-import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
@@ -13,8 +11,9 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.appcompat.app.AppCompatActivity;
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     public static final String PREFS = "intercom_prefs";
@@ -62,21 +61,23 @@ public class MainActivity extends Activity {
     }
 
     private void requestPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            String[] perms = {Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA};
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                perms = new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA, Manifest.permission.POST_NOTIFICATIONS};
-            }
-            requestPermissions(perms, 1);
+        String[] perms = {Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA};
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            perms = new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA, Manifest.permission.POST_NOTIFICATIONS};
         }
+        requestPermissions(perms, 1);
     }
 
     private void startDoorbellService() {
-        Intent service = new Intent(this, DoorbellService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(service);
-        } else {
-            startService(service);
+        try {
+            Intent service = new Intent(this, DoorbellService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(service);
+            } else {
+                startService(service);
+            }
+        } catch (Exception e) {
+            // ignore service errors on startup
         }
     }
 
@@ -88,12 +89,14 @@ public class MainActivity extends Activity {
 
     private void handleIntent(Intent intent) {
         if (intent != null && "DOORBELL".equals(intent.getAction())) {
-            webView.post(() -> webView.evaluateJavascript("showRinging();", null));
+            if (webView != null) {
+                webView.post(() -> webView.evaluateJavascript("if(typeof showRinging==='function')showRinging();", null));
+            }
         }
     }
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack();
+        if (webView != null && webView.canGoBack()) webView.goBack();
     }
 }
